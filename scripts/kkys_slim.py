@@ -29,7 +29,7 @@ UA = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
 
 class Spider(_BaseSpider):
     HOST = 'https://www.kkys20.com'
-    PIC = 'https://vf.wkcyvs.cn'
+    PIC = 'https://103.39.111.180:51050'
     HAS_FETCH = hasattr(_BaseSpider, 'fetch')
 
     def getName(self):
@@ -197,7 +197,8 @@ class Spider(_BaseSpider):
                         html, re.S)
         desc = re.search(r'class="detail-desc"[^>]*>(.*?)</div>', html, re.S)
         cont = re.sub(r'<[^>]+>', '', desc.group(1)).strip() if desc else ''
-        year = (re.search(r'(19|20)\d{2}', html) or [None, ''])[1]
+        ym = re.search(r'(?:19|20)\d{2}', html)
+        year = ym.group(0) if ym else ''
         lines = self._play_lines(html)
         if not lines:
             return result
