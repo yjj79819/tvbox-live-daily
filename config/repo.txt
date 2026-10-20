@@ -1,9 +1,7 @@
 # 本仓库的地址，用于生成 output 里那些可直接访问的 URL。
 # 格式：owner/repo 分支名（分支名可省略，默认 main）
-#
-# 建好 GitHub 仓库后把这里改成真实地址，例如：
-#   zhangsan/tvbox-live main
-#
+
+yjj79819/tvbox-live-daily main
 # 留空时程序会依次尝试
 #   Actions 环境变量 GITHUB_REPOSITORY / GITHUB_REF
 #   > git remote 里的 origin 地址

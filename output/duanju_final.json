@@ -14,26 +14,13 @@
    "timeout": 90
   },
   {
-   "key": "py_sf",
-   "name": "🟡聚合短剧·红果黄豆黄果黄剧",
+   "key": "py_kk",
+   "name": "⭐可可追剧[第九季]",
    "type": 3,
-   "api": "http://127.0.0.1:9978/file/dj2/dj_final_shortfilm.py",
+   "api": "http://127.0.0.1:9978/file/dj2/dj_final_kkys.py",
    "searchable": 1,
    "quickSearch": 1,
-   "filterable": 1,
-   "jar": "http://127.0.0.1:9978/file/dj/xs.jar",
-   "timeout": 120
-  },
-  {
-   "key": "py_hema",
-   "name": "🦛河马短剧",
-   "type": 3,
-   "api": "http://127.0.0.1:9978/file/dj2/dj_final_hema.py",
-   "searchable": 1,
-   "quickSearch": 1,
-   "filterable": 1,
-   "jar": "http://127.0.0.1:9978/file/dj/xs.jar",
-   "timeout": 90
+   "filterable": 1
   },
   {
    "key": "py_tq",
