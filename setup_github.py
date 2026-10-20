@@ -94,13 +94,16 @@ def main() -> int:
         return 1
     print(f"  已认证：{login}")
 
-    # 走代理才能连上 GitHub 时，把代理配给 git（gh 自己读环境变量）
+    # 走代理才能连上 GitHub 时，把代理配给 git（gh 自己读环境变量）。
+    # 大写优先：小写那套常被别的程序占着（比如本机 54682 是 WorkBuddy 自己的代理，
+    # 不是全流量的，GitHub 的请求过不去）。
     proxy = (
-        os.environ.get("https_proxy") or os.environ.get("HTTPS_PROXY")
-        or os.environ.get("http_proxy") or os.environ.get("HTTP_PROXY")
+        os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+        or os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy")
     )
     if proxy:
         sh(["git", "config", "http.proxy", proxy])
+        sh(["git", "config", "https.proxy", proxy])
         print(f"  git 代理：{proxy}")
 
     u = u or gh_api("user") or {}
