@@ -14,6 +14,48 @@
    "timeout": 90
   },
   {
+   "key": "py_sf",
+   "name": "🟡聚合短剧·红果黄豆黄果黄剧",
+   "type": 3,
+   "api": "http://127.0.0.1:9978/file/dj2/dj_final_shortfilm.py",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "jar": "http://127.0.0.1:9978/file/dj/xs.jar",
+   "timeout": 120
+  },
+  {
+   "key": "py_hema",
+   "name": "🦛河马短剧",
+   "type": 3,
+   "api": "http://127.0.0.1:9978/file/dj2/dj_final_hema.py",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "jar": "http://127.0.0.1:9978/file/dj/xs.jar",
+   "timeout": 90
+  },
+  {
+   "key": "py_tq",
+   "name": "🍩甜圈短剧[62类]",
+   "type": 3,
+   "api": "http://127.0.0.1:9978/file/dj2/dj_final_tianquan.py",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "jar": "http://127.0.0.1:9978/file/dj/xs.jar",
+   "timeout": 90
+  },
+  {
+   "key": "clun_duanshipin",
+   "name": "🎭聚合短剧[js]",
+   "type": 3,
+   "api": "https://clun.top/js/聚合短剧.js",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1
+  },
+  {
    "key": "vod_0",
    "name": "🎬猫眼影视",
    "type": 1,
