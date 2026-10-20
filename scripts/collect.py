@@ -13,13 +13,16 @@ from __future__ import annotations
 import json
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from common import (
     DATA_DIR,
+    cache_flush,
+    cache_stat,
     gh_api,
     http_get,
+    http_get_cached,
     ipv6_supported,
     is_ipv6_url,
     log,
@@ -261,8 +264,11 @@ def _fetch_one(repo: dict, f: dict) -> list[dict]:
         r = prefetched
     else:
         raw = f"https://raw.githubusercontent.com/{full}/{f['branch']}/{f['path']}"
-        # 文件已确认存在，值得多试一个镜像；但 4 个全试太慢，取 2
-        r = http_get(raw, timeout=45, allow_mirror=True, max_mirrors=2)
+        # 优先条件请求：文件没变就回 304，直接用本地缓存正文，省掉整份下载。
+        # 缓存里没有（首次运行）或直连不通时才回退到镜像通道。
+        r = http_get_cached(raw, timeout=45)
+        if r is None:
+            r = http_get(raw, timeout=45, allow_mirror=True, max_mirrors=2)
     if r is None:
         return []
     try:
@@ -313,19 +319,39 @@ def _process_repo(repo: dict) -> tuple[list[dict], int, int, str]:
     return out, len(files), len(out), how
 
 
-def collect(repos: list[dict], workers: int = 12) -> tuple[list[dict], dict]:
-    """并发抓取，返回 (频道列表, 统计信息)。"""
-    stats = {"repos": len(repos), "files": 0, "raw": 0, "by_repo": {}, "via_api": 0, "via_guess": 0}
+def collect(
+    repos: list[dict], workers: int = 16, budget: float = 200
+) -> tuple[list[dict], dict]:
+    """并发抓取，返回 (频道列表, 统计信息)。
+
+    budget：抓取阶段的时间预算（秒）。到点就取消还没跑完的仓库，
+    用已抓到的部分继续往下走 —— 宁可少抓几个仓库，也不能让 Actions 超时白跑。
+    """
+    stats = {
+        "repos": len(repos),
+        "repos_done": 0,
+        "files": 0,
+        "raw": 0,
+        "by_repo": {},
+        "via_api": 0,
+        "via_guess": 0,
+    }
     all_rows: list[dict] = []
+    t0 = time.time()
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futures = [ex.submit(_process_repo, r) for r in repos]
-        for repo, fu in zip(repos, futures):
+        fu_map = {ex.submit(_process_repo, r): r for r in repos}
+        pending = set(fu_map)
+        for fu in as_completed(fu_map):
+            pending.discard(fu)
+            repo = fu_map[fu]
             try:
                 rows, nfiles, nrows, how = fu.result(timeout=300)
             except Exception as e:  # noqa: BLE001
                 warn(f"处理失败 {repo['full_name']}: {type(e).__name__}")
+                stats["repos"] -= 1
                 continue
+            stats["repos_done"] += 1
             stats["files"] += nfiles
             stats["raw"] += nrows
             if how == "api":
@@ -337,7 +363,18 @@ def collect(repos: list[dict], workers: int = 12) -> tuple[list[dict], dict]:
                 log(f"  ✓ {repo['full_name']:<42} {nfiles} 文件 / {nrows} 条 [{how}]")
             all_rows.extend(rows)
 
+            if time.time() - t0 > budget and pending:
+                for f in pending:
+                    f.cancel()
+                log(
+                    f"抓取预算 {int(budget)}s 用尽：已处理 {stats['repos_done']} 个仓库，"
+                    f"放弃剩余 {len(pending)} 个"
+                )
+                break
+
+    cache_flush()
     log(f"取文件方式：API 列目录 {stats['via_api']} 个仓库，路径猜测 {stats['via_guess']} 个仓库")
+    log(f"HTTP 缓存：{cache_stat()}")
 
     # 丢弃已知失效的源，再做归一化去重
     cd = state_mod.load_cooldown()

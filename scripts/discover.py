@@ -56,11 +56,20 @@ def _search(keyword: str, per_page: int) -> list[dict]:
     return out
 
 
-def discover(max_per_keyword: int = 12, max_repos: int = 50) -> list[dict]:
+def discover(
+    max_per_keyword: int = 12,
+    max_repos: int = 50,
+    cache_days: float = 7,
+    kw_limit: int = 0,
+) -> list[dict]:
     """返回去重后的仓库列表。
 
     排序规则：种子仓库优先（人工验证过，必须抓），
     其余按星数降序——星数是唯一能低成本筛掉噪声仓库的信号。
+
+    仓库清单在 7 天内复用缓存、只跑 1 个关键词做增量补充：
+    搜索 API 限额最紧（带 token 也才 30 次/分钟），两天跑一次时
+    仓库集合几乎不变，没必要每次把关键词全刷一遍。
     """
     repos: dict[str, dict] = {}
 
@@ -68,7 +77,29 @@ def discover(max_per_keyword: int = 12, max_repos: int = 50) -> list[dict]:
         repos[s["full_name"]] = s
     log(f"种子仓库 {len(repos)} 个")
 
+    cache_file = DATA_DIR / "discovered_repos.json"
+    age_days = None
+    if cache_file.exists():
+        age_days = (time.time() - cache_file.stat().st_mtime) / 86400
+        if age_days < cache_days:
+            try:
+                cached = json.loads(cache_file.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                cached = []
+            for r in cached:
+                if r.get("full_name") and r["full_name"] not in repos:
+                    repos[r["full_name"]] = r
+            log(f"复用 {age_days:.1f} 天前的仓库缓存 {len(cached)} 个，本次只做增量搜索")
+
     kws = read_lines("discover_keywords.txt")
+    if kw_limit:
+        kws = kws[:kw_limit]
+    elif age_days is not None and age_days < cache_days and kws:
+        # 缓存新鲜：只跑 1 个关键词补新仓库，且按「年内第几天」轮换，
+        # 免得每次都搜同一个词、新仓库永远只在第一个词的圈子里打转。
+        pick = kws[int(time.strftime("%j")) % len(kws)]
+        kws = [pick]
+        log(f"增量搜索轮换关键词：{pick}")
     for kw in kws:
         got = _search(kw, max_per_keyword)
         for r in got:
@@ -81,14 +112,14 @@ def discover(max_per_keyword: int = 12, max_repos: int = 50) -> list[dict]:
 
     result = list(repos.values())
     result.sort(key=lambda x: (0 if x["source"] == "seed" else 1, -(x.get("stars") or 0)))
-    if len(result) > max_repos:
-        log(f"仓库数 {len(result)} 超过上限 {max_repos}，按优先级截断")
-        result = result[:max_repos]
-    log(f"发现阶段完成，共 {len(result)} 个仓库")
-
+    # 缓存必须写「未截断」的全量：否则下次运行复用的是被 max_repos 削过的
+    # 清单，仓库池只会越跑越小。
     (DATA_DIR / "discovered_repos.json").write_text(
         json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8"
     )
+    if len(result) > max_repos:
+        result = result[:max_repos]
+    log(f"发现阶段完成，取前 {len(result)} 个仓库（清单缓存已存全量 {len(repos)} 个）")
     return result
 
 

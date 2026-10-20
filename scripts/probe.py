@@ -154,8 +154,14 @@ def probe(
     max_probe: int = 2500,
     timeout: float = 8.0,
     workers: int = 48,
+    budget: float = 240,
 ) -> tuple[list[dict], list[dict], list[dict], dict]:
-    """返回 (可用频道, IPv6 未测速频道, 失效明细, 统计)。"""
+    """返回 (可用频道, IPv6 未测速频道, 失效明细, 统计)。
+
+    budget：测速阶段的时间预算（秒）。到点即停，已测到的部分照常入库。
+    直播测速是最容易把 Actions 拖死的一阶段（源站慢、连接挂起），
+    有了硬预算就不会因为一批慢源把整次运行拖到 6 小时上限。
+    """
     v6_ok = ipv6_supported()
 
     # 老源补种：本次没抓到、但档案里记着能用的源，拉回来复测
@@ -206,11 +212,24 @@ def probe(
     results: list[dict] = []
     done = 0
     t0 = time.time()
+    # 分批提交而不是一次性 ex.map：ex.map 一旦发出就收不回来，
+    # 分批才能在预算用尽时取消掉还没开始的探测任务。
+    batch = max(workers * 4, 64)
+    abandoned = 0
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        for r in ex.map(lambda c: probe_one(c, timeout), to_probe):
-            results.append(r)
-            done += 1
-            if done % 300 == 0:
+        for i in range(0, len(to_probe), batch):
+            if time.time() - t0 > budget:
+                abandoned = len(to_probe) - i
+                log(
+                    f"测速预算 {int(budget)}s 用尽：已测 {done}/{len(to_probe)}，"
+                    f"放弃剩余 {abandoned} 条"
+                )
+                break
+            chunk = to_probe[i : i + batch]
+            for r in ex.map(lambda c: probe_one(c, timeout), chunk):
+                results.append(r)
+                done += 1
+            if done % 300 < batch:
                 log(f"  已探测 {done}/{len(to_probe)}，用时 {int(time.time()-t0)}s")
 
     # 按协议族拆回两组：IPv4 进主清单，IPv6 单独成册
@@ -235,8 +254,9 @@ def probe(
     stats = {
         "ipv4_total": len(v4_rows),
         "ipv6_total": len(v6_rows),
-        "probed": len(to_probe),
+        "probed": len(results),
         "skipped_quota": skipped,
+        "abandoned": abandoned,
         "ok": len(ok_rows),
         "fail": len(fail_rows),
         "v6_ok": len(ok_v6),

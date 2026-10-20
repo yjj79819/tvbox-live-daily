@@ -8,10 +8,16 @@
 
 可用环境变量：
     MAX_PROBE        最大探测条数，默认 2500
+    REPO_LIMIT       最多处理几个仓库，默认 40
     TIMEOUT          单条探测超时秒，默认 8
-    WORKERS          并发数，默认 48
+    WORKERS          探测并发数，默认 48
+    FETCH_WORKERS    抓取并发数，默认 16
+    FETCH_BUDGET     抓取阶段时间预算秒，默认 200
+    PROBE_BUDGET     测速阶段时间预算秒，默认 240
     KEEP_PER_CHANNEL 每个频道保留几条备用源，默认 3
     GH_TOKEN         GitHub API 令牌（可选，Actions 中自动注入）
+
+各阶段都有硬时间预算：宁可少抓少测，也不能让 Actions 跑到超时白跑一场。
 """
 from __future__ import annotations
 
@@ -34,8 +40,18 @@ from common import gh_remaining, log  # noqa: E402
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--max-probe", type=int, default=int(os.environ.get("MAX_PROBE", "2500")))
-    ap.add_argument("--timeout", type=float, default=float(os.environ.get("TIMEOUT", "8")))
-    ap.add_argument("--workers", type=int, default=int(os.environ.get("WORKERS", "48")))
+    ap.add_argument("--repo-limit", type=int, default=int(os.environ.get("REPO_LIMIT", "40")))
+    ap.add_argument("--timeout", type=float, default=float(os.environ.get("TIMEOUT", "7")))
+    ap.add_argument("--workers", type=int, default=int(os.environ.get("WORKERS", "32")))
+    ap.add_argument(
+        "--fetch-workers", type=int, default=int(os.environ.get("FETCH_WORKERS", "16"))
+    )
+    ap.add_argument(
+        "--fetch-budget", type=float, default=float(os.environ.get("FETCH_BUDGET", "200"))
+    )
+    ap.add_argument(
+        "--probe-budget", type=float, default=float(os.environ.get("PROBE_BUDGET", "240"))
+    )
     ap.add_argument("--no-probe", action="store_true", help="跳过测速，仅抓取解析")
     ap.add_argument("--verify", action="store_true", help="结束后顺带验证各访问通道")
     args = ap.parse_args()
@@ -47,13 +63,15 @@ def main() -> int:
     log("=" * 60)
 
     # 阶段 1：发现仓库
-    repos = discover_mod.discover()
+    repos = discover_mod.discover(max_repos=args.repo_limit)
     if not repos:
         log("未发现任何仓库，退出")
         return 1
 
     # 阶段 2：抓取解析
-    channels, cstats = collect_mod.collect(repos)
+    channels, cstats = collect_mod.collect(
+        repos, workers=args.fetch_workers, budget=args.fetch_budget
+    )
     if not channels:
         log("未抓到任何频道，退出")
         return 1
@@ -80,6 +98,7 @@ def main() -> int:
             max_probe=args.max_probe,
             timeout=args.timeout,
             workers=args.workers,
+            budget=args.probe_budget,
         )
         # 把本次结果记进健康档案：活过的留档，死掉的进冷却
         sstats = state_mod.update(ok_rows + fail_rows)

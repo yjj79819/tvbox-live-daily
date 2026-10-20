@@ -360,14 +360,20 @@ def write_report(
     L.append("")
     L.append("| 指标 | 数值 |")
     L.append("|---|---|")
-    L.append(f"| 扫描仓库 | {collect_stats.get('repos', 0)} |")
+    L.append(
+        f"| 扫描仓库 | {collect_stats.get('repos_done', 0)} / 计划 {collect_stats.get('repos', 0)} |"
+    )
     L.append(f"| 命中文件 | {collect_stats.get('files', 0)} |")
     L.append(f"| 抓取条目 | {collect_stats.get('raw', 0)} |")
     L.append(f"| 冷却剔除 | {collect_stats.get('cooled', 0)} |")
     L.append(f"| 重复剔除 | {collect_stats.get('dup', 0)} |")
     L.append(f"| 去重后 | {collect_stats.get('unique', 0)} |")
+    _ab = probe_stats.get("abandoned", 0)
     L.append(
-        f"| IPv4 探测 | {probe_stats.get('probed', 0)}（跳过 {probe_stats.get('skipped_quota', 0)}） |"
+        f"| IPv4 探测 | {probe_stats.get('probed', 0)}"
+        f"（跳过 {probe_stats.get('skipped_quota', 0)}"
+        + (f"，预算到点放弃 {_ab}" if _ab else "")
+        + "） |"
     )
     L.append(f"| **可用频道源** | **{probe_stats.get('ok', 0)}** |")
     L.append(f"| 失效剔除 | {probe_stats.get('fail', 0)} |")

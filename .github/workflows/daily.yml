@@ -4,6 +4,9 @@ on:
   # UTC 19:00 = 北京时间次日 03:00，逢单日运行（1、3、5 ... 31 号）
   # 选凌晨是因为 GitHub 调度在高峰期会排队延迟，深夜最准，
   # 且此时源站负载低，测速结果更接近真实体验。
+  #
+  # 注意：cron 的 */2 在跨月时会连着两天命中（如 7/31 与 8/1），
+  # 所以下面还有一个「距上次运行 <40 小时就跳过」的闸门兜底。
   schedule:
     - cron: "0 19 */2 * *"
   # 允许随时手动触发
@@ -12,7 +15,11 @@ on:
       max_probe:
         description: "最大探测条数"
         required: false
-        default: "2500"
+        default: "1600"
+      force:
+        description: "忽略频率闸门，强制运行"
+        required: false
+        default: "false"
 
 permissions:
   contents: write
@@ -24,7 +31,9 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    # 全流程预算：抓取 150s + 测速 150s + 构建验证 ≈ 10 分钟足够。
+    # 设 25 分钟只是兜底，正常不会到；设小一点能在真异常时早点失败释放 runner。
+    timeout-minutes: 25
 
     steps:
       - name: 检出代码
@@ -32,29 +41,83 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: 频率闸门
+        # 双重保护：一是 cron 跨月连跑（*/2 在 31 号→1 号会连着命中），
+        # 二是 GitHub 偶发的调度补跑。两种情况下本次直接跳过，
+        # 既省 Actions 额度，也避免高频访问被源站/GitHub 判定为滥用。
+        id: gate
+        run: |
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+            echo "::notice::手动强制运行，跳过频率检查"
+            exit 0
+          fi
+          F=state/last_run.txt
+          if [ -f "$F" ]; then
+            LAST=$(cat "$F" | tr -d '[:space:]')
+            NOW=$(date -u +%s)
+            if [ -n "$LAST" ]; then
+              DIFF=$(( (NOW - LAST) / 3600 ))
+              if [ "$DIFF" -lt 40 ]; then
+                echo "run=false" >> $GITHUB_OUTPUT
+                echo "::notice::距上次成功运行仅 ${DIFF} 小时（<40h），本次跳过"
+                exit 0
+              fi
+            fi
+          fi
+          echo "run=true" >> $GITHUB_OUTPUT
+
+      - name: 恢复抓取缓存
+        if: steps.gate.outputs.run == 'true'
+        # data/ 不入库，用 actions/cache 跨运行保留：
+        #   1) http_index.json + bodycache/ —— 让 90% 没变的文件走 304，
+        #      不必每次全量重下 194 个源文件（这是最大的提速项）
+        #   2) discovered_repos.json —— 仓库清单复用，省搜索 API 限额
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: harvest-${{ github.run_id }}
+          restore-keys: |
+            harvest-
+
       - name: 准备 Python
+        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
 
       - name: 安装依赖
+        if: steps.gate.outputs.run == 'true'
         run: pip install -r requirements.txt
 
       - name: 抓取并优选
+        if: steps.gate.outputs.run == 'true'
         env:
           # Actions 自动注入，用于提高 GitHub API 限额；无需手动配置
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MAX_PROBE: ${{ github.event.inputs.max_probe || '2500' }}
+          # 规模与预算：宁可少抓少测，也不让单跑拖到超时
+          MAX_PROBE: ${{ github.event.inputs.max_probe || '1600' }}
+          REPO_LIMIT: "32"
+          TIMEOUT: "6"
+          WORKERS: "24"
+          FETCH_WORKERS: "16"
+          FETCH_BUDGET: "150"
+          PROBE_BUDGET: "150"
         run: python run.py
 
       - name: 提交结果
+        if: steps.gate.outputs.run == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          date -u +%s > state/last_run.txt
           git add -A
           if git diff --staged --quiet; then
-            echo "本次无变化，跳过提交"
+            echo "本次无变化，仅更新运行时间戳"
+            git commit -m "chore: 记录运行时间 $(date -u +'%Y-%m-%d %H:%M UTC')" || true
+            git pull --rebase origin ${GITHUB_REF_NAME} || true
+            git push || true
           else
             git commit -m "chore: 更新直播源 $(date -u +'%Y-%m-%d %H:%M UTC')"
             git pull --rebase origin ${GITHUB_REF_NAME} || true
@@ -62,16 +125,20 @@ jobs:
           fi
 
       - name: 等待 raw 同步
+        if: steps.gate.outputs.run == 'true'
         # push 之后 raw.githubusercontent.com 需要几秒才刷新，
         # 不等待的话下一步验证拿到的是上一版内容，会误判成全部落后。
-        run: sleep 30
+        run: sleep 20
 
       - name: 验证访问通道
+        if: steps.gate.outputs.run == 'true'
         id: verify
+        # 验证只是旁路记录，失败不该让整次运行标红
+        continue-on-error: true
         run: python scripts/verify.py
 
       - name: 提交验证结果
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -81,5 +148,5 @@ jobs:
           else
             git commit -m "chore: 更新通道验证结果 $(date -u +'%Y-%m-%d %H:%M UTC')"
             git pull --rebase origin ${GITHUB_REF_NAME} || true
-            git push
+            git push || true
           fi

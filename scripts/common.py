@@ -7,6 +7,7 @@ GitHub Actions 运行环境不支持 IPv6，本文件同时提供环境探测能
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import random
 import re
@@ -114,6 +115,124 @@ def http_get(
     if last_err and not quiet:
         warn(f"GET 失败 {url[:90]} -> {type(last_err).__name__}")
     return None
+
+
+# ---------------- 条件请求缓存（省带宽 / 提速 / 抗抖动） ----------------
+#
+# 源仓库里的文件绝大多数两天内根本没变，但每次运行都要全量重下一遍
+# （实测 194 个文件），这是抓取阶段的主要耗时。这里用 ETag / Last-Modified
+# 做条件请求：服务端回 304 就直接复用上次存下的正文，省掉下载与解析。
+# 正文存在 data/bodycache/（data/ 不入库），跨运行由 actions/cache 保留。
+# 另外：网络失败时若有缓存正文，也降级复用 —— 抖动不会让本次产出变空。
+
+BODY_CACHE_DIR = DATA_DIR / "bodycache"
+HTTP_INDEX_FILE = DATA_DIR / "http_index.json"
+_HTTP_INDEX: dict | None = None
+_CACHE_STAT = {"hit": 0, "miss": 0, "stale": 0, "saved_bytes": 0}
+
+
+class CachedResponse:
+    """Response 的最小替身：调用方只用到 status_code / content / text。"""
+
+    def __init__(self, content: bytes, url: str, from_cache: bool = True):
+        self.status_code = 200
+        self.content = content
+        self.url = url
+        self.from_cache = from_cache
+
+    @property
+    def text(self) -> str:
+        return self.content.decode("utf-8", errors="ignore")
+
+
+def _index_load() -> dict:
+    global _HTTP_INDEX
+    if _HTTP_INDEX is None:
+        if HTTP_INDEX_FILE.exists():
+            try:
+                _HTTP_INDEX = json.loads(HTTP_INDEX_FILE.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                _HTTP_INDEX = {}
+        else:
+            _HTTP_INDEX = {}
+    return _HTTP_INDEX
+
+
+def cache_flush() -> None:
+    """把缓存索引落盘。抓取结束后调用一次即可。"""
+    global _HTTP_INDEX
+    if _HTTP_INDEX is None:
+        return
+    BODY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = HTTP_INDEX_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(_HTTP_INDEX, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(HTTP_INDEX_FILE)
+
+
+def cache_stat() -> str:
+    return (
+        f"{_CACHE_STAT['hit']} 命中304 / {_CACHE_STAT['miss']} 重下 / "
+        f"{_CACHE_STAT['stale']} 降级用旧 / 省 {_CACHE_STAT['saved_bytes']//1024}KB"
+    )
+
+
+def http_get_cached(url: str, timeout: float = 45) -> CachedResponse | None:
+    """带条件请求的 GET。命中 304 或网络失败时返回缓存正文；彻底无解返回 None。
+
+    只在「文件已确认存在、要整份下载」的场景使用（collect 取文件内容）。
+    探测文件是否存在的场景不要用 —— 那里关心的是状态码本身。
+    """
+    idx = _index_load()
+    ent = idx.get(url) or {}
+    headers = {"User-Agent": UA, "Accept": "*/*"}
+    if ent.get("etag"):
+        headers["If-None-Match"] = ent["etag"]
+    elif ent.get("lm"):
+        headers["If-Modified-Since"] = ent["lm"]
+
+    def _from_cache(kind: str) -> CachedResponse | None:
+        p = BODY_CACHE_DIR / ent.get("body", "")
+        if ent.get("body") and p.exists():
+            _CACHE_STAT[kind] += 1
+            try:
+                return CachedResponse(p.read_bytes(), url)
+            except Exception:  # noqa: BLE001
+                return None
+        return None
+
+    try:
+        r = SESSION.get(url, timeout=timeout, headers=headers, allow_redirects=True)
+    except Exception:  # noqa: BLE001
+        # 网络层失败：有旧正文就先用旧的，本次结果不至于空掉
+        got = _from_cache("stale")
+        if got is None:
+            warn(f"GET 失败且无缓存 {url[:90]}")
+        return got
+
+    if r.status_code == 304:
+        got = _from_cache("hit")
+        if got is not None:
+            _CACHE_STAT["saved_bytes"] += ent.get("size", 0)
+            return got
+    if r.status_code >= 400:
+        return None
+
+    body = r.content
+    key = hashlib.md5(url.encode("utf-8")).hexdigest()[:20] + ".bin"
+    BODY_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        (BODY_CACHE_DIR / key).write_bytes(body)
+    except Exception:  # noqa: BLE001
+        pass
+    idx[url] = {
+        "etag": r.headers.get("ETag", ""),
+        "lm": r.headers.get("Last-Modified", ""),
+        "body": key,
+        "size": len(body),
+        "ts": int(time.time()),
+    }
+    _CACHE_STAT["miss"] += 1
+    return CachedResponse(body, url)
 
 
 def http_head(url: str, timeout: float = 10) -> requests.Response | None:
