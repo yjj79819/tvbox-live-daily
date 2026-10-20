@@ -14,28 +14,6 @@
    "timeout": 90
   },
   {
-   "key": "py_sf",
-   "name": "🟡聚合短剧·红果黄豆黄果黄剧",
-   "type": 3,
-   "api": "http://127.0.0.1:9978/file/dj2/dj_final_shortfilm.py",
-   "searchable": 1,
-   "quickSearch": 1,
-   "filterable": 1,
-   "jar": "http://127.0.0.1:9978/file/dj/xs.jar",
-   "timeout": 120
-  },
-  {
-   "key": "py_hema",
-   "name": "🦛河马短剧",
-   "type": 3,
-   "api": "http://127.0.0.1:9978/file/dj2/dj_final_hema.py",
-   "searchable": 1,
-   "quickSearch": 1,
-   "filterable": 1,
-   "jar": "http://127.0.0.1:9978/file/dj/xs.jar",
-   "timeout": 90
-  },
-  {
    "key": "vod_0",
    "name": "🎬猫眼影视",
    "type": 1,
@@ -67,16 +45,6 @@
   },
   {
    "key": "vod_3",
-   "name": "🎬电影天堂",
-   "type": 1,
-   "api": "https://caiji.dyttzyapi.com/api.php/provide/vod",
-   "searchable": 1,
-   "quickSearch": 1,
-   "filterable": 1,
-   "playerType": 2
-  },
-  {
-   "key": "vod_4",
    "name": "🎬急速影视",
    "type": 1,
    "api": "https://jszyapi.com/api.php/provide/vod",
@@ -86,70 +54,10 @@
    "playerType": 2
   },
   {
-   "key": "vod_5",
+   "key": "vod_4",
    "name": "🎬暴风影视",
    "type": 1,
    "api": "https://bfzyapi.com/api.php/provide/vod",
-   "searchable": 1,
-   "quickSearch": 1,
-   "filterable": 1,
-   "playerType": 2
-  },
-  {
-   "key": "vod_6",
-   "name": "🎬精英影视",
-   "type": 1,
-   "api": "https://jyzyapi.com/provide/vod",
-   "searchable": 1,
-   "quickSearch": 1,
-   "filterable": 1,
-   "playerType": 2
-  },
-  {
-   "key": "vod_7",
-   "name": "🎬光速影视",
-   "type": 1,
-   "api": "https://api.guangsuapi.com/api.php/provide/vod",
-   "searchable": 1,
-   "quickSearch": 1,
-   "filterable": 1,
-   "playerType": 2
-  },
-  {
-   "key": "vod_8",
-   "name": "🎬虎牙影视",
-   "type": 1,
-   "api": "https://www.huyaapi.com/api.php/provide/vod",
-   "searchable": 1,
-   "quickSearch": 1,
-   "filterable": 1,
-   "playerType": 2
-  },
-  {
-   "key": "vod_9",
-   "name": "🎬2100影视",
-   "type": 1,
-   "api": "https://p2100.net/api.php/provide/vod",
-   "searchable": 1,
-   "quickSearch": 1,
-   "filterable": 1,
-   "playerType": 2
-  },
-  {
-   "key": "vod_10",
-   "name": "🎬哈哈影视",
-   "type": 1,
-   "api": "https://hhzyapi.com/api.php/provide/vod",
-   "searchable": 1,
-   "quickSearch": 1,
-   "filterable": 1,
-   "playerType": 2
-  },
-  {
-   "key": "vod_11",
-   "name": "🎬最强影视",
-   "type": 1,
-   "api": "https://api.zuidapi.com/api.php/provide/vod",
    "searchable": 1,
    "quickSearch": 1,
    "filterable": 1,
