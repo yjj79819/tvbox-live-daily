@@ -1,0 +1,9 @@
+# 种子仓库清单（每行一个 owner/repo，# 开头为注释）
+# 这些是经过人工验证的直播源仓库，每次运行必定抓取，不依赖搜索 API
+# 搜索 API 负责发现新仓库，本清单负责保底
+Supprise0901/TVBox_live
+haha130/iptv-api
+Guovin/iptv-api
+fanmingming/live
+adminouyang/231006
+cluntop/tvbox

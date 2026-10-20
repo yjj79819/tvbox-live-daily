@@ -1,0 +1,8 @@
+# GitHub 仓库搜索关键词（每行一个）
+# 脚本会对每个关键词按 updated desc 排序取出最新仓库，用于发现新出现的直播源仓库
+tvbox
+iptv
+iptv-api
+tvbox-live
+直播源
+live

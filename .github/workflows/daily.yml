@@ -1,0 +1,85 @@
+name: 直播源优选（每两天）
+
+on:
+  # UTC 19:00 = 北京时间次日 03:00，逢单日运行（1、3、5 ... 31 号）
+  # 选凌晨是因为 GitHub 调度在高峰期会排队延迟，深夜最准，
+  # 且此时源站负载低，测速结果更接近真实体验。
+  schedule:
+    - cron: "0 19 */2 * *"
+  # 允许随时手动触发
+  workflow_dispatch:
+    inputs:
+      max_probe:
+        description: "最大探测条数"
+        required: false
+        default: "2500"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 准备 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 抓取并优选
+        env:
+          # Actions 自动注入，用于提高 GitHub API 限额；无需手动配置
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAX_PROBE: ${{ github.event.inputs.max_probe || '2500' }}
+        run: python run.py
+
+      - name: 提交结果
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "本次无变化，跳过提交"
+          else
+            git commit -m "chore: 更新直播源 $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git pull --rebase origin ${GITHUB_REF_NAME} || true
+            git push
+          fi
+
+      - name: 等待 raw 同步
+        # push 之后 raw.githubusercontent.com 需要几秒才刷新，
+        # 不等待的话下一步验证拿到的是上一版内容，会误判成全部落后。
+        run: sleep 30
+
+      - name: 验证访问通道
+        id: verify
+        run: python scripts/verify.py
+
+      - name: 提交验证结果
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/verify.md
+          if git diff --staged --quiet; then
+            echo "验证结果无变化，跳过提交"
+          else
+            git commit -m "chore: 更新通道验证结果 $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git pull --rebase origin ${GITHUB_REF_NAME} || true
+            git push
+          fi

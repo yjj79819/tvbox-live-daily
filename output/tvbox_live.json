@@ -1,0 +1,33 @@
+{
+ "lives": [
+  {
+   "name": "优选直播",
+   "type": 0,
+   "url": "https://raw.githubusercontent.com/OWNER/REPO/main/output/live.txt",
+   "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
+  },
+  {
+   "name": "优选直播·ghproxy.net",
+   "type": 0,
+   "url": "https://ghproxy.net/https://raw.githubusercontent.com/OWNER/REPO/main/output/live.txt",
+   "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
+  },
+  {
+   "name": "优选直播·ghfast.top",
+   "type": 0,
+   "url": "https://ghfast.top/https://raw.githubusercontent.com/OWNER/REPO/main/output/live.txt",
+   "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
+  },
+  {
+   "name": "直播·IPv6",
+   "type": 0,
+   "url": "https://raw.githubusercontent.com/OWNER/REPO/main/output/live_ipv6.txt",
+   "epg": "https://epg.112114.eu.org/?ch={name}&date={date}"
+  },
+  {
+   "name": "通用M3U",
+   "type": 0,
+   "url": "https://raw.githubusercontent.com/OWNER/REPO/main/output/live.m3u"
+  }
+ ]
+}

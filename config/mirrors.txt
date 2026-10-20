@@ -1,0 +1,39 @@
+# 仓库文件的访问地址模板。每行：名称|模板
+# 可用占位符：
+#   {slug}   = owner/repo      {branch} = 分支名
+#   {path}   = 文件路径        {u}      = 完整的 raw 地址
+#
+# 全部经过实测（2026-10-21 从本机逐个 curl）。
+# 排序按实测响应速度从快到慢，程序输出地址清单时沿用这个顺序。
+#
+直连|https://raw.githubusercontent.com/{slug}/{branch}/{path}
+ghproxy.net|https://ghproxy.net/{u}
+ghfast.top|https://ghfast.top/{u}
+gh-proxy.com|https://gh-proxy.com/{u}
+jsDelivr|https://cdn.jsdelivr.net/gh/{slug}@{branch}/{path}
+
+# ---------- 实测失效，先别打开 ----------
+# 以下站点在同一时间实测均不可用（超时 / 404 / 返回内容不符），
+# 留在这里只为记录结论，避免以后又把它们捡回来。
+# ghproxy.com|https://ghproxy.com/{u}                  超时 15s 无响应
+# githubraw.com|https://githubraw.com/{u}              HTTP404
+# githubraw.com|https://githubraw.com/{slug}/{branch}/{path}   超时
+# raw.kkgithub.com|https://raw.kkgithub.com/{u}        超时
+# raw.gitmirror.com|https://raw.gitmirror.com/{slug}/{branch}/{path}  域名无法解析
+# gh.llkk.cc|https://gh.llkk.cc/{u}                    超时
+# gh-proxy.linqi.dev|https://gh-proxy.linqi.dev/{u}    超时
+# gh.api.99988866.xyz|https://gh.api.99988866.xyz/{u}  超时
+# mirror.ghproxy.com|https://mirror.ghproxy.com/{u}    超时
+# gh.idc.ooo|https://gh.idc.ooo/{u}                    连接被重置
+# gh-proxy.ygxz.in|https://gh-proxy.ygxz.in/{u}        超时
+# gh.flyinbug.top|https://gh.flyinbug.top/{u}          HTTP502
+# gh-proxy.0z.me|https://gh-proxy.0z.me/{u}            域名无法解析
+# fastly.jsdelivr.net|https://fastly.jsdelivr.net/gh/{slug}@{branch}/{path}  超时
+# gh.con.sh|https://gh.con.sh/{u}                      HTTP200 但内容为空壳
+
+# ---------- 使用说明 ----------
+# jsDelivr 走的是 CDN 缓存，对分支内容最长缓存 12 小时。
+# 本仓库每两天更新一次，作为备用通道完全够用，
+# 但它在 CDN 上的副本会滞后于仓库，别拿它当主用。
+#
+# 想临时禁用某个站，在行首加 # 即可，下次运行生效。
